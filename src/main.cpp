@@ -45,6 +45,7 @@ std::vector<std::vector<cell> > step(std::vector<std::vector<cell> > grid, int *
 bool check(std::vector<std::vector<cell> > grid); 
 void displayGrid(std::vector<std::vector<cell> > grid);
 std::vector<std::vector<cell> > solve(std::vector<std::vector<cell> > grid, int currentColor, int x, int y, std::vector<int> indexes);
+bool isImpossible(std::vector<std::vector<cell> > grid, std::vector<int> indexes);
 
 std::vector<Vec3f> extractCircles(Mat src);
 int getNumberOfCells(Mat src, std::vector<Vec3f> circles);
@@ -73,6 +74,30 @@ void displayGrid(std::vector<std::vector<cell> > grid) {
     }
     std::cout << std::endl;
   }
+}
+
+//une configuration est mauvaise si un noeud est entouré par d'autres couleurs que la sienne ou zéro
+bool isImpossible(std::vector<std::vector<cell> > grid, std::vector<int> indexes) {
+  for (int i = 0; i < indexes.size(); i += 3) {
+    int x = indexes[i + 0];
+    int y = indexes[i + 1];
+    int color = indexes[i + 2];
+    
+    int okCells = 0;
+    for(int directionInt = TOP; directionInt != none; directionInt++) {
+      directions d = static_cast<directions>(directionInt);
+      int x1 = x, y1 = y;
+      posFromDirection(x1, y1, d);
+
+      if(y1 < 0 || y1 == grid.size()) continue;
+      if(x1 < 0 || x1 == grid.size()) continue;
+      
+      int neighborColor = grid[x1][y1].color;
+      if(neighborColor == 0 || neighborColor == color) okCells++;
+    }
+    if(okCells == 0) return true;
+  }
+  return false;
 }
 
 std::vector<std::vector<cell> > step(std::vector<std::vector<cell> > grid, int *currentColor, int x, int y) {
@@ -154,8 +179,8 @@ std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int
 
     // displayGrid(g);
     // std::cout << std::endl;
-      
-    solve(g, currentColor, x1, y1, indexes);
+    if(!isImpossible(grid, indexes))
+      solve(g, currentColor, x1, y1, indexes);
   }
   // std::cout << iterCount << std::endl;
   return grid;
