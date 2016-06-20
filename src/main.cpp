@@ -39,12 +39,11 @@ struct cell {
 
   void setColor(int color) {
     this->color = color;
-    // this->pipe = std::to_string(color);
     this->pipe = color;
   }
 
   cell(){}
-  cell(const cell &c) {
+  cell(const cell& c) {
     this->color = c.color;
     this->node = c.node;
     this->done = c.done;
@@ -52,14 +51,7 @@ struct cell {
   }
   cell(int color) {
     this->color = color;
-    
-    // this->pipe = std::to_string(color);
-    // this->pipe = color;
   }
-
-  // cell(int pipe) {
-  //   this->pipe = pipe;
-  // }
 };
 
 std::vector<std::vector<cell> > errorValue;
@@ -320,17 +312,18 @@ bool pipesStuck(std::vector<std::vector<cell> > grid) {
   return false;
 }
 
-bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::vector<int> indexes, directions d, bool display = false) {
-  int startX = indexes[(currentColor - 1) * 6 + 0];
-  int startY = indexes[(currentColor - 1) * 6 + 1];
+bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::vector<int> indexes, directions d, int startX, int startY, bool display = false) {
+  // int startX = indexes[(currentColor - 1) * 6 + 0];
+  // int startY = indexes[(currentColor - 1) * 6 + 1];
+
+  startX = indexes[(currentColor - 1) * 6 + 0];
+  startY = indexes[(currentColor - 1) * 6 + 1];
 
   int endX = indexes[(currentColor - 1) * 6 + 3];
   int endY = indexes[(currentColor - 1) * 6 + 4];
 
-  std::cout << "coming from " << d << std::endl;
-
   std::function<bool(int, int, directions)> f;
-  f = [grid, indexes, endX, endY, &f](int x, int y, directions d) {
+  f = [grid, indexes, endX, endY, display, &f](int x, int y, directions d) {
     posFromDirection(x, y, d);
 
     if(y < 0 || y >= grid.size()) return false;
@@ -372,7 +365,6 @@ bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::ve
       nextD = LEFT;
     else if(pipe == 5 && d == RIGHT)
       nextD = TOP;
-
     else return false;
 
     return f(x, y, nextD);
@@ -381,61 +373,50 @@ bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::ve
   return f(startX, startY, d);
 }
 
-std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid1, int currentColor, int x, int y, std::vector<int> indexes, directions from, int lastPipe = 6) {
-  // for(int directionInt = TOP; directionInt != none; directionInt++) {
-  //   directions d = static_cast<directions>(directionInt);
-  for(auto d : filteredDirections[lastPipe]) {
+std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid1, int currentColor, int x, int y, std::vector<int> indexes, directions from, int lastPipe = 6, int okNodes = 0) {
+  if(okNodes == indexes.size() / 6) {
+      std::cout << "=================================" << std::endl;
+      displayGrid(grid1);
+      std::cout << "=================================" << std::endl;
+      std::cout << iterCount << std::endl;
+      exit(0);
+      return grid1;
+    }
+    for(auto d : filteredDirections[lastPipe]) {
     int x1 = x, y1 = y;
     posFromDirection(x1, y1, d);
 
     if(y1 < 0 || y1 >= grid1.size()) continue;
     if(x1 < 0 || x1 >= grid1.size()) continue;
 
-    // if(grid1[x1][y1].node || grid1[x1][y1].pipe == -1 || grid1[x1][y1].color == 0) {
-    //   displayGrid(grid1);
-
-    //   std::cout << "filtered node " << x1 << ", " << y1 << std::endl;
-    // }
-
-    // std::cout << currentColor << std::endl;
-
     if(!grid1[x1][y1].node && grid1[x1][y1].pipe == -1 && grid1[x1][y1].color == 0) {
       /**** NE SELECTIONNER QUE LES PIPES QUI PERMETTENT D'ALLER DANS LA DIRECTION CHOISIE ****/
       for (int i = 0; i < filteredPipes[d].size(); i++) {
 	std::vector<std::vector<cell> > grid;
-	grid.resize(grid1.size());
-	for (int i = 0; i < grid1.size(); i++) {
-	  grid[i].resize(grid1.size());
-	  for (int j = 0; j < grid1.size(); j++) {
-	    cell c(grid1[i][j]);
-	    grid[i][j] = c;
-	  }
+	for(auto i : grid1) {
+	  grid.push_back(i);
 	}
+	int pipeTmp = filteredPipes[d][i];
 
-	grid[x1][y1].pipe = filteredPipes[d][i];
+	grid[x1][y1].pipe = pipeTmp;
 	grid[x1][y1].color = currentColor;
-	displayGrid(grid);
-	// std::cout << x1 << ", " << y1 << std::endl;
 	directions tmp = from;
+	int okNodesTmp = okNodes;
 	if(tmp == none) tmp = d;
-    	std::cout << "linked = " << nodesLinked(grid, currentColor, indexes, tmp, true) << std::endl;
-	std::cout << std::endl;
-	// std::cout << "pipesStuck = " << pipesStuck(grid) << std::endl;
-	// std::cout <<  std::endl;
+	int currentColorTmp = currentColor;
 
-	if(!pipesStuck(grid)) {
-	  if(nodesLinked(grid, currentColor, indexes, tmp)) {
-	    // std::cout << "good : " << std::endl;
-	    // displayGrid(grid);
-	    std::cout <<  std::endl;
+	//if(!pipesStuck(grid)) {
+	//if(nodesLinked(grid, currentColorTmp, indexes, tmp)) {
+	if(nodesLinked(grid, currentColorTmp, indexes, tmp, x, y)) {
 	    tmp = none;
 	    x1 = indexes[(currentColor) * 6];
 	    y1 = indexes[(currentColor) * 6 + 1];
-	    // std::cout << x1 << ", " << y1 << std::endl;
-	    currentColor++;
-	  } else
-	    solvePipes(grid, currentColor, x1, y1, indexes, tmp, filteredPipes[d][i]);
-	}
+	    currentColorTmp++;
+	    pipeTmp = 6;
+	    okNodesTmp++;
+	  }
+	  solvePipes(grid, currentColorTmp, x1, y1, indexes, tmp, pipeTmp, okNodesTmp);
+        //}
       }
     }
   }
@@ -614,7 +595,7 @@ int main(int argc, char **argv) {
   }
 
 
-  // solve(grid, 1, indexes[0], indexes[1], indexes);
+  //solve(grid, 1, indexes[0], indexes[1], indexes);
   solvePipes(grid, 1, indexes[0], indexes[1], indexes, none);
 
   // std::cout <<  << std::endl;  
