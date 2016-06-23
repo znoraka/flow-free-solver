@@ -6,8 +6,8 @@ ADD_DEFINITIONS(
   -std=c++11
   -w
   -lpthread
-  # -Ofast
-  -g
+  -Ofast
+  # -g
   # -ljpeg
   )
 
