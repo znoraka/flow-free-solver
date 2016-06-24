@@ -23,6 +23,8 @@ std::vector<std::vector<int> > filteredPipes;
 std::vector<std::vector<directions> > filteredDirections;
 
 int iterCount = 0;
+int count = 0;
+long long acc = 0;
 std::chrono::time_point<std::chrono::system_clock> start;
 
 void posFromDirection (int &x, int &y, directions d) {
@@ -122,9 +124,8 @@ void displayGrid(std::vector<std::vector<cell> > grid, bool pathes = true) {
     s = std::regex_replace(s, std::regex(" ┐"), "─┐");
     s = std::regex_replace(s, std::regex(" ┘"), "─┘");
     s = std::regex_replace(s, std::regex("└ "), "└─");
-  
 
-    std::cout << s << std::endl;
+    std::cout << s;
   }
 }
 
@@ -217,14 +218,13 @@ bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::ve
 std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid1, int currentColor, int x, int y, std::vector<int> indexes, directions from, int lastPipe = 6, int okNodes = 0) {
     iterCount++;
     if(okNodes == indexes.size() / 6) {
-      if(check(grid1)) {
-	std::cout << "=================================" << std::endl;
-	displayGrid(grid1);
-	std::cout << "=================================" << std::endl;
-	std::cout << iterCount << std::endl;
-	exit(0);
-	return grid1;
-      } 
+      std::cout << "\r" << "débit moyen : " << acc / count << " path/s" << std::flush;
+      std::cout << std::endl;
+      std::cout << "=================================" << std::endl;
+      displayGrid(grid1);
+      std::cout << "=================================" << std::endl;
+      std::cout << iterCount << std::endl;
+      exit(0);
     }
 
   int endX = indexes[(currentColor - 1) * 6 + 3];
@@ -293,12 +293,12 @@ std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int
   std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
   int elapsed_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count();
   if(elapsed_seconds > 1000) {
+    count++;
+    acc += iterCount;
     std::cout << "\r" << "débit : " << iterCount << " path/s" << std::flush;
     iterCount = 0;
     start = std::chrono::system_clock::now();
   }
-  // std::cout << "finished computation at " << std::ctime(&end_time)
-  // 	    << "elapsed time: " << elapsed_seconds << "ms\n";
 
   auto logDirection = [](directions d) {
     switch (d) {
@@ -337,7 +337,7 @@ std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int
     } 
       
     if(check(g)) {
-      displayGrid(g, false);
+      // displayGrid(g, false);
       solvePipes(g, 1, indexes[0], indexes[1], indexes, none);
       resultGrid = g;
       // return g;
