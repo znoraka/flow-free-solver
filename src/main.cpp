@@ -68,6 +68,7 @@ bool isImpossible(std::vector<std::vector<cell> > grid, std::vector<int> indexes
 int manhattanDistance(int x1, int y1, int x2, int y2);
 bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::vector<int> indexes, directions d, int startX, int startY, bool display);
 std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid1, int currentColor, int x, int y, std::vector<int> indexes, directions from, int lastPipe, int okNodes);
+directions directionFromPipeAndDirection(int pipe, directions d);
 
 std::vector<Vec3f> extractCircles(Mat src);
 int getNumberOfCells(Mat src, std::vector<Vec3f> circles);
@@ -158,7 +159,6 @@ std::vector<std::vector<cell> > step(std::vector<std::vector<cell> > grid, int *
     if(grid[x][y].node && grid[x][y].color == (*currentColor) && !grid[x][y].done) {
       tempCol = 0;
       grid[x][y].done = true;
-      // std::cout << "currentColor = " << *currentColor << std::endl;
     } else {
       return errorValue;
     }
@@ -178,6 +178,112 @@ bool check(std::vector<std::vector<cell> > grid) {
     }
   }
   return true;
+}
+
+bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::vector<int> indexes, directions d) {
+  int startX = indexes[(currentColor - 1) * 6 + 0];
+  int startY = indexes[(currentColor - 1) * 6 + 1];
+
+  int endX = indexes[(currentColor - 1) * 6 + 3];
+  int endY = indexes[(currentColor - 1) * 6 + 4];
+
+  std::function<bool(int, int, directions)> f;
+  f = [grid, indexes, endX, endY, &f](int x, int y, directions d) {
+    posFromDirection(x, y, d);
+
+    if(y < 0 || y >= grid.size()) return false;
+    if(x < 0 || x >= grid.size()) return false;
+
+    if(x == endX && y == endY) return true;
+
+    directions nextD = d;
+    int pipe = grid[x][y].pipe;
+
+    if(pipe == -1) return false;
+
+    nextD = directionFromPipeAndDirection(pipe, d);
+
+    if(nextD == none) return false;
+
+    return f(x, y, nextD);
+  };
+
+  return f(startX, startY, d);
+}
+
+std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid1, int currentColor, int x, int y, std::vector<int> indexes, directions from, int lastPipe = 6, int okNodes = 0) {
+    iterCount++;
+    std::cout << x << ", " << y << std::endl;
+    if(okNodes == indexes.size() / 6) {
+      if(check(grid1)) {
+	std::cout << "=================================" << std::endl;
+	displayGrid(grid1);
+	std::cout << "=================================" << std::endl;
+	std::cout << iterCount << std::endl;
+	exit(0);
+	return grid1;
+      } 
+    }
+
+  int endX = indexes[(currentColor - 1) * 6 + 3];
+  int endY = indexes[(currentColor - 1) * 6 + 4];
+    
+  auto sortedFilteredDirections = filteredDirections[lastPipe];
+  std::sort(sortedFilteredDirections.begin(), sortedFilteredDirections.end(), [x, y, endX, endY](directions d1, directions d2) {
+      int x1 = x, x2 = x, y1 = y, y2 = y;
+      posFromDirection(x1, y1, d1);
+      posFromDirection(x2, y2, d2);
+      
+      return manhattanDistance(x1, y1, endX, endY) < manhattanDistance(x2, y2, endX, endY);
+    });
+
+  for(auto d : sortedFilteredDirections) {
+    int x1 = x, y1 = y;
+    posFromDirection(x1, y1, d);
+
+    if(y1 < 0 || y1 >= grid1.size()) continue;
+    if(x1 < 0 || x1 >= grid1.size()) continue;
+
+    if(!isImpossible(grid1, indexes) && !grid1[x1][y1].node && grid1[x1][y1].pipe == -1 && grid1[x1][y1].color == currentColor) {
+      /**** NE SELECTIONNER QUE LES PIPES QUI PERMETTENT D'ALLER DANS LA DIRECTION CHOISIE ****/
+      /**** TRIER LES PIPES SELON LA DISTANCE DE MANHATTAN À LA TARGET POUR ACCELERER L'EXPLORATION ****/
+      auto sortedFilteredPipes = filteredPipes[d];
+      std::sort(sortedFilteredPipes.begin(), sortedFilteredPipes.end(), [d, x1, y1, endX, endY](int p1, int p2) {
+	  int xa = x1, xb = x1, ya = y1, yb = y1;
+	  posFromDirection(xa, ya, directionFromPipeAndDirection(p1, d));
+	  posFromDirection(xb, yb, directionFromPipeAndDirection(p2, d));
+      
+	  return manhattanDistance(xa, ya, endX, endY) < manhattanDistance(xb, yb, endX, endY);
+	});
+
+      for(auto i : sortedFilteredPipes) {
+	std::vector<std::vector<cell> > grid;
+	for(auto i : grid1) {
+	  grid.push_back(i);
+	}
+	int pipeTmp = i;
+
+	grid[x1][y1].pipe = pipeTmp;
+	directions tmp = from;
+	int okNodesTmp = okNodes;
+	if(tmp == none) tmp = d;
+	int currentColorTmp = currentColor;
+
+	if(nodesLinked(grid, currentColorTmp, indexes, tmp)) {
+	  if(currentColor < indexes.size() / 6) {
+	    x1 = indexes[(currentColor) * 6];
+	    y1 = indexes[(currentColor) * 6 + 1];
+	  }
+	  currentColorTmp++;
+	  okNodesTmp++;
+	  pipeTmp = 6;
+	  tmp = none;
+	}
+	solvePipes(grid, currentColorTmp, x1, y1, indexes, tmp, pipeTmp, okNodesTmp);
+      }
+    }
+  }
+  return grid1;
 }
 
 std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int currentColor, int x, int y, std::vector<int> indexes, int filled) {
@@ -204,10 +310,7 @@ std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int
       return manhattanDistance(x1, y1, endX, endY) < manhattanDistance(x2, y2, endX, endY);
     });
   
-  // for(int directionInt = TOP; directionInt != none; directionInt++) {
-  //   directions d = static_cast<directions>(directionInt);
   for(auto d : sortedFilteredDirections) {
-    // std::cout << d << std::endl;
     int c = currentColor;
     int x1 = x, y1 = y;
     posFromDirection(x1, y1, d);
@@ -215,142 +318,27 @@ std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int
     std::vector<std::vector<cell> > g = step(grid, &c, x1, y1);
 
     if(g.size() == 0){
-      // logDirection(d);
       continue;
     } 
       
     if(check(g)) {
-    // if(filled - 4 >= g.size() * g.size()) {
-      // std::cout << filled << " == " << g.size() * g.size() << std::endl;
-      // std::cout << "=================================" << std::endl;
       displayGrid(g, false);
-      solvePipes(g, 1, indexes[0], indexes[1], indexes, none, 6, 0);
-
-      // std::cout << "=================================" << std::endl;
-      // std::cout << iterCount << std::endl;
+      solvePipes(g, 1, indexes[0], indexes[1], indexes, none);
       resultGrid = g;
-
-      // exit(0);
       return g;
     }
 
     if(c == 0) {
       x1 = indexes[(currentColor) * 6];
       y1 = indexes[(currentColor) * 6 + 1];
-
-      // std::cout << "x1 = " << x1 << std::endl;
-      // std::cout << "y1 = " << y1 << std::endl;
-
       currentColor++;
     }
 
     if(!isImpossible(grid, indexes) && currentColor <= indexes.size() / 6) {
       solve(g, currentColor, x1, y1, indexes, filled + 1);
-    } else {
-      // displayGrid(g);
-      // std::cout << std::endl;
     }
   }
-  // std::cout << iterCount << std::endl;
   return grid;
-}
-
-bool pipesStuck(std::vector<std::vector<cell> > grid) {
-  auto leftOk = [](std::vector<std::vector<cell> > grid, int x, int y) {
-    posFromDirection(x, y, LEFT);
-    if(y < 0 || y >= grid.size()) return false;
-    if(x < 0 || x >= grid.size()) return false;
-    if(grid[x][y].color != 0) return true;
-    int pipe = grid[x][y].pipe;
-    // if(!pipe.compare("┐") || !pipe.compare("|") || !pipe.compare("┘"))
-    if(pipe == 0 || pipe == 2 || pipe == 5)
-      return false;
-    return true;
-  };
-
- auto rightOk = [](std::vector<std::vector<cell> > grid, int x, int y) {
-    posFromDirection(x, y, RIGHT);
-    if(y < 0 || y >= grid.size()) return false;
-    if(x < 0 || x >= grid.size()) return false;
-    // std::string pipe = grid[x][y].pipe;
-    if(grid[x][y].color != 0) return true;
-    int pipe = grid[x][y].pipe;
-    // if(!pipe.compare("┌") || !pipe.compare("|") || !pipe.compare("└"))
-    if(pipe == 1 || pipe == 2 || pipe == 4)
-      return false;
-    return true;
- };
-
-  auto topOk = [](std::vector<std::vector<cell> > grid, int x, int y) {
-    posFromDirection(x, y, TOP);
-    if(y < 0 || y >= grid.size()) return false;
-    if(x < 0 || x >= grid.size()) return false;
-    // std::string pipe = grid[x][y].pipe;
-    if(grid[x][y].color != 0) return true;
-    int pipe = grid[x][y].pipe;
-    // if(!pipe.compare("−") || !pipe.compare("└") || !pipe.compare("┘"))
-    if(pipe == 3 || pipe == 4 || pipe == 5)
-      return false;
-    return true;
-  };
-
-  auto bottomOk = [](std::vector<std::vector<cell> > grid, int x, int y) {
-    posFromDirection(x, y, BOTTOM);
-    if(y < 0 || y >= grid.size()) return false;
-    if(x < 0 || x >= grid.size()) return false;
-    // std::string pipe = grid[x][y].pipe;
-    if(grid[x][y].color != 0) return true;
-    int pipe = grid[x][y].pipe;
-    // if(!pipe.compare("−") || !pipe.compare("┐") || !pipe.compare("┌"))
-    if(pipe == 3 || pipe == 0 || pipe == 1)
-      return false;
-    return true;
-  };
-  
-  for (int i = 0; i < grid.size(); i++) {
-    for (int j = 0; j < grid.size(); j++) {
-      int pipe = grid[i][j].pipe;
-
-      // "┐", "┌", "|", "−", "└", "┘"
-	
-      // if(pipe.compare("┐") == 0) {
-      if(pipe == 0) {
-	if(!(leftOk(grid, i, j) && bottomOk(grid, i, j)))
-	  return true;
-      }
-
-      // if(pipe.compare("┌") == 0) {
-      if(pipe == 1) {
-	if(!(rightOk(grid, i, j) && bottomOk(grid, i, j)))
-	  return true;
-      }
-
-      // if(pipe.compare("|") == 0) {
-      if(pipe == 2) {
-	if(!(topOk(grid, i, j) && bottomOk(grid, i, j)))
-	  return true;
-      }
-
-      // if(pipe.compare("−") == 0) {
-      if(pipe == 3) {
-	if(!(leftOk(grid, i, j) && rightOk(grid, i, j)))
-	  return true;
-      }
-      
-      // if(pipe.compare("└") == 0) {
-      if(pipe == 4) {
-	if(!(rightOk(grid, i, j) && topOk(grid, i, j)))
-	  return true;
-      }
-       
-      // if(pipe.compare("┘") == 0) {
-      if(pipe == 5) {
-	if(!(leftOk(grid, i, j) && topOk(grid, i, j)))
-	  return true;
-      }
-    }
-  }
-  return false;
 }
 
 directions directionFromPipeAndDirection(int pipe, directions d) {
@@ -393,136 +381,6 @@ int manhattanDistance(int x1, int y1, int x2, int y2) {
   return abs(x2 - x1) + abs(y2 - y1);
 }
 
-bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::vector<int> indexes, directions d, int startX, int startY, bool display = false) {
-  // int startX = indexes[(currentColor - 1) * 6 + 0];
-  // int startY = indexes[(currentColor - 1) * 6 + 1];
-
-  startX = indexes[(currentColor - 1) * 6 + 0];
-  startY = indexes[(currentColor - 1) * 6 + 1];
-
-  int endX = indexes[(currentColor - 1) * 6 + 3];
-  int endY = indexes[(currentColor - 1) * 6 + 4];
-
-  std::function<bool(int, int, directions)> f;
-  f = [grid, indexes, endX, endY, display, &f](int x, int y, directions d) {
-    posFromDirection(x, y, d);
-
-    if(y < 0 || y >= grid.size()) return false;
-    if(x < 0 || x >= grid.size()) return false;
-
-    if(x == endX && y == endY) return true;
-
-    directions nextD = d;
-    int pipe = grid[x][y].pipe;
-
-    if(pipe == -1) return false;
-
-    nextD = directionFromPipeAndDirection(pipe, d);
-
-    if(nextD == none) return false;
-
-    return f(x, y, nextD);
-  };
-
-  return f(startX, startY, d);
-}
-
-std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid1, int currentColor, int x, int y, std::vector<int> indexes, directions from, int lastPipe = 6, int okNodes = 0) {
-    iterCount++;
-    std::cout << x << ", " << y << std::endl;
-    //TODO vérifier que la grille est pleine
-    if(okNodes == indexes.size() / 6) {
-      if(check(grid1)) {
-	std::cout << "=================================" << std::endl;
-	displayGrid(grid1);
-	std::cout << "=================================" << std::endl;
-	std::cout << iterCount << std::endl;
-	exit(0);
-	return grid1;
-      } else {
-	currentColor = indexes.size() / 6 - 1;
-	// std::cout << "current color = " << currentColor << std::endl;
-      	x = indexes[(currentColor) * 6];
-      	y = indexes[(currentColor) * 6 + 1];
-	// std::cout << "x = " << x << std::endl;
-	// std::cout << "y = " << y << std::endl;
-      	okNodes--;
-      }
-    }
-
-  int endX = indexes[(currentColor - 1) * 6 + 3];
-  int endY = indexes[(currentColor - 1) * 6 + 4];
-    
-  auto sortedFilteredDirections = filteredDirections[lastPipe];
-  std::sort(sortedFilteredDirections.begin(), sortedFilteredDirections.end(), [x, y, endX, endY](directions d1, directions d2) {
-      int x1 = x, x2 = x, y1 = y, y2 = y;
-      posFromDirection(x1, y1, d1);
-      posFromDirection(x2, y2, d2);
-      
-      return manhattanDistance(x1, y1, endX, endY) < manhattanDistance(x2, y2, endX, endY);
-    });
-
-  for(auto d : sortedFilteredDirections) {
-    int x1 = x, y1 = y;
-    posFromDirection(x1, y1, d);
-
-    if(y1 < 0 || y1 >= grid1.size()) continue;
-    if(x1 < 0 || x1 >= grid1.size()) continue;
-
-    // if(!grid1[x1][y1].node && grid1[x1][y1].color == currentColor) {
-    if(!isImpossible(grid1, indexes) && !grid1[x1][y1].node && grid1[x1][y1].pipe == -1 && grid1[x1][y1].color == currentColor) {
-      /**** NE SELECTIONNER QUE LES PIPES QUI PERMETTENT D'ALLER DANS LA DIRECTION CHOISIE ****/
-      /**** TRIER LES PIPES SELON LA DISTANCE DE MANHATTAN À LA TARGET POUR ACCELERER L'EXPLORATION ****/
-      auto sortedFilteredPipes = filteredPipes[d];
-      std::sort(sortedFilteredPipes.begin(), sortedFilteredPipes.end(), [d, x1, y1, endX, endY](int p1, int p2) {
-	  int xa = x1, xb = x1, ya = y1, yb = y1;
-	  posFromDirection(xa, ya, directionFromPipeAndDirection(p1, d));
-	  posFromDirection(xb, yb, directionFromPipeAndDirection(p2, d));
-      
-	  return manhattanDistance(xa, ya, endX, endY) < manhattanDistance(xb, yb, endX, endY);
-	});
-      
-      // for (int i = 0; i < filteredPipes[d].size(); i++) {
-    for(auto i : sortedFilteredPipes) {
-	std::vector<std::vector<cell> > grid;
-	for(auto i : grid1) {
-	  grid.push_back(i);
-	}
-	// int pipeTmp = filteredPipes[d][i];
-	int pipeTmp = i;
-
-	// std::cout << x1 << ", " << y1 << std::endl;
-	grid[x1][y1].pipe = pipeTmp;
-	// grid[x1][y1].color = currentColor;
-	directions tmp = from;
-	int okNodesTmp = okNodes;
-	if(tmp == none) tmp = d;
-	int currentColorTmp = currentColor;
-
-	// if(okNodes + 1 == indexes.size() / 6) {
-	  // displayGrid(grid);
-	  // std::cout << std::endl;
-	// }
-
-	// if(!pipesStuck(grid)) {
-	//if(nodesLinked(grid, currentColorTmp, indexes, tmp)) {
-	if(nodesLinked(grid, currentColorTmp, indexes, tmp, x, y)) {
-	    // if(okNodes < indexes.size() / 6) {
-	      x1 = indexes[(currentColor) * 6];
-	      y1 = indexes[(currentColor) * 6 + 1];
-	      currentColorTmp++;
-	      okNodesTmp++;
-	    // }
-	      pipeTmp = 6;
-	      tmp = none;
-	  }
-	  solvePipes(grid, currentColorTmp, x1, y1, indexes, tmp, pipeTmp, okNodesTmp);
-        // }
-      }
-    }
-  }
-  return grid1;
-}
 
 std::vector<Vec3f> extractCircles(Mat src) {
   Mat src_gray, src_eroded;
@@ -582,13 +440,7 @@ std::vector<Vec3f> extractCircles(Mat src) {
       // circle outline
       circle( src, center, radius, Scalar(255,0,255), 3, 8, 0 );
    }
-
-  /// Show your results
-  // namedWindow( "Hough Circle Transform Demo", CV_WINDOW_AUTOSIZE );
-  // imshow( "Hough Circle Transform Demo", src );
-  //
   imwrite("out.jpg", src);
-  // waitKey(0);
 
   //TODO enlever les mauvais cercles
   return circles;
@@ -651,10 +503,6 @@ std::vector<int> indexesFromCircles(Mat src, std::vector<Vec3f> circles, int num
 }
 
 int main(int argc, char **argv) {  
-// enum directions {TOP = 0, BOTTOM = 1, LEFT = 2, RIGHT = 3, none = 4};
-// std::vector<std::string> pipes = {"┐", "┌", "|", "−", "└", "┘"};
-// std::vector<std::vector<int> > filteredPipes;
-
   filteredPipes.push_back({0, 1, 2}); //TOP
   filteredPipes.push_back({2, 4, 5}); //BOTTOM
   filteredPipes.push_back({1, 3, 4}); //LEFT
@@ -699,9 +547,6 @@ int main(int argc, char **argv) {
   }
 
   solve(grid, 1, indexes[0], indexes[1], indexes, indexes.size() / 3);
-  // displayGrid(resultGrid);
-
-  // std::cout <<  << std::endl;  
   return 0;
 
 }
