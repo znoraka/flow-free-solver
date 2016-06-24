@@ -5,10 +5,8 @@ cmake_minimum_required(VERSION 2.6)
 ADD_DEFINITIONS(
   -std=c++11
   -w
-  -lpthread
   -Ofast
   # -g
-  # -ljpeg
   )
 
 find_package(OpenCV REQUIRED)
@@ -33,4 +31,4 @@ add_executable(
 
   )
 
-target_link_libraries(flow-free-solver ${OpenCV_LIBS} -lpthread -lX11)
+target_link_libraries(flow-free-solver ${OpenCV_LIBS} -lpthread -lX11 -fopenmp)

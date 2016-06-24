@@ -8,6 +8,8 @@
 #include <map>
 #include <set>
 #include <regex>
+#include <chrono>
+#include <ctime>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/opencv.hpp>
@@ -21,6 +23,7 @@ std::vector<std::vector<int> > filteredPipes;
 std::vector<std::vector<directions> > filteredDirections;
 
 int iterCount = 0;
+std::chrono::time_point<std::chrono::system_clock> start;
 
 void posFromDirection (int &x, int &y, directions d) {
   switch (d) {
@@ -213,7 +216,6 @@ bool nodesLinked(std::vector<std::vector<cell> > grid, int currentColor, std::ve
 
 std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid1, int currentColor, int x, int y, std::vector<int> indexes, directions from, int lastPipe = 6, int okNodes = 0) {
     iterCount++;
-    std::cout << x << ", " << y << std::endl;
     if(okNodes == indexes.size() / 6) {
       if(check(grid1)) {
 	std::cout << "=================================" << std::endl;
@@ -288,6 +290,16 @@ std::vector<std::vector<cell> > solvePipes (std::vector<std::vector<cell> > grid
 
 std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int currentColor, int x, int y, std::vector<int> indexes, int filled) {
   iterCount++;
+  std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
+  int elapsed_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count();
+  if(elapsed_seconds > 1000) {
+    std::cout << "\r" << "débit : " << iterCount << " path/s" << std::flush;
+    iterCount = 0;
+    start = std::chrono::system_clock::now();
+  }
+  // std::cout << "finished computation at " << std::ctime(&end_time)
+  // 	    << "elapsed time: " << elapsed_seconds << "ms\n";
+
   auto logDirection = [](directions d) {
     switch (d) {
     case TOP: std::cout << "TOP not possible" << std::endl; return;
@@ -309,7 +321,10 @@ std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int
       
       return manhattanDistance(x1, y1, endX, endY) < manhattanDistance(x2, y2, endX, endY);
     });
-  
+
+  // #pragma omp parallel for
+  // for (int i = 0; i < sortedFilteredDirections.size(); i++) {
+  //   auto d = sortedFilteredDirections[i];
   for(auto d : sortedFilteredDirections) {
     int c = currentColor;
     int x1 = x, y1 = y;
@@ -325,7 +340,7 @@ std::vector<std::vector<cell> > solve (std::vector<std::vector<cell> > grid, int
       displayGrid(g, false);
       solvePipes(g, 1, indexes[0], indexes[1], indexes, none);
       resultGrid = g;
-      return g;
+      // return g;
     }
 
     if(c == 0) {
@@ -469,8 +484,8 @@ std::vector<int> indexesFromCircles(Mat src, std::vector<Vec3f> circles, int num
   
   for( size_t i = 0; i < circles.size(); i++ ) {
     Vec3b c1 = src.at<Vec3b>(cvRound(circles[i][1]), cvRound(circles[i][0]));
-    std::cout << circles[i] << std::endl;
-    std::cout << c1 << std::endl;
+    // std::cout << circles[i] << std::endl;
+    // std::cout << c1 << std::endl;
     int minDistance = 255 * 3;
     int index;
     
@@ -481,7 +496,7 @@ std::vector<int> indexesFromCircles(Mat src, std::vector<Vec3f> circles, int num
 	if(distance < minDistance) {
 	  index = j;
 	  minDistance = distance;
-	  std::cout << minDistance << std::endl;
+	  // std::cout << minDistance << std::endl;
 	}
       }
     }
@@ -490,7 +505,7 @@ std::vector<int> indexesFromCircles(Mat src, std::vector<Vec3f> circles, int num
 
   int n = 1;
   for(auto i : couples) {
-    std::cout << i.first << " " << i.second << std::endl;
+    // std::cout << i.first << " " << i.second << std::endl;
     indexes.push_back((circles[i.first][1] * numberOfCells) / src.cols);
     indexes.push_back((circles[i.first][0] * numberOfCells) / src.cols);
     indexes.push_back(n);
@@ -527,26 +542,12 @@ int main(int argc, char **argv) {
   std::cout << "number of cells = " << numberOfCells << std::endl;
   auto indexes = indexesFromCircles(img, circles, numberOfCells);
 
-  int n = 0;
-  for(auto i : indexes) {
-    std::cout << i << " ";
-    n++;
-    if(n == 3) std::cout << std::endl;
-    if(n == 6) {
-      std::cout << "\n" << std::endl;
-      n = 0;
-    } 
-
-  }
-
   auto grid = initGrid(numberOfCells, indexes);
   displayGrid(grid);
-
-  for(auto i : pipes) {
-    std::cout << "pipe = " << i << std::endl;
-  }
-
+  
+  start = std::chrono::system_clock::now();
   solve(grid, 1, indexes[0], indexes[1], indexes, indexes.size() / 3);
+  // int elapsed_seconds = std::chrono::duration_cast<std::chrono::microseconds>(start).count;
   return 0;
 
 }
